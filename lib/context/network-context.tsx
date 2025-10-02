@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react"
 
 // Updated types to match what components expect
 export interface NNLayer {
@@ -97,6 +97,8 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     accuracy: 0,
   })
 
+  const trainingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
     console.log("[v0] NetworkProvider mounted, auto-loading classification network")
     loadTemplate("classification")
@@ -140,9 +142,13 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     setIsTraining(true)
     setTrainingProgress({ epoch: 0, loss: 1.0, accuracy: 0 })
 
+    if (trainingIntervalRef.current) {
+      clearInterval(trainingIntervalRef.current)
+    }
+
     // Simple training simulation
     let epoch = 0
-    const interval = setInterval(() => {
+    trainingIntervalRef.current = setInterval(() => {
       epoch++
       const progress = epoch / trainConfig.epochs
       const loss = Math.max(0.01, 1.0 * Math.exp(-progress * 3) + Math.random() * 0.05)
@@ -161,19 +167,40 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       if (epoch >= trainConfig.epochs) {
         console.log("[v0] Training completed")
         setIsTraining(false)
-        clearInterval(interval)
+        if (trainingIntervalRef.current) {
+          clearInterval(trainingIntervalRef.current)
+          trainingIntervalRef.current = null
+        }
       }
     }, 100)
   }
 
   const stopTraining = () => {
+    console.log("[v0] Stopping training")
+    if (trainingIntervalRef.current) {
+      clearInterval(trainingIntervalRef.current)
+      trainingIntervalRef.current = null
+    }
     setIsTraining(false)
   }
 
   const resetTraining = () => {
-    setTrainingProgress({ epoch: 0, loss: 0, accuracy: 0 })
+    console.log("[v0] Resetting training")
+    if (trainingIntervalRef.current) {
+      clearInterval(trainingIntervalRef.current)
+      trainingIntervalRef.current = null
+    }
     setIsTraining(false)
+    setTrainingProgress({ epoch: 0, loss: 0, accuracy: 0 })
   }
+
+  useEffect(() => {
+    return () => {
+      if (trainingIntervalRef.current) {
+        clearInterval(trainingIntervalRef.current)
+      }
+    }
+  }, [])
 
   const value: NetworkContextType = {
     network,

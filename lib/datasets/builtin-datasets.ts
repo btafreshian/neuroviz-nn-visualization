@@ -27,7 +27,7 @@ export const spiralDataset: Dataset = {
 }
 
 // Generate moons dataset
-function generateMoons(nSamples = 200, noise = 0.1): Dataset {
+function generateMoons(nSamples = 1000, noise = 0.1): Dataset {
   const features: number[][] = []
   const labels: number[] = []
 
@@ -52,7 +52,7 @@ function generateMoons(nSamples = 200, noise = 0.1): Dataset {
 }
 
 // Generate spiral dataset
-function generateSpiral(nSamples = 200): Dataset {
+function generateSpiral(nSamples = 1000): Dataset {
   const features: number[][] = []
   const labels: number[] = []
 

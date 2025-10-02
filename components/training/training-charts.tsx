@@ -21,22 +21,29 @@ export function TrainingCharts() {
       setLossHistory([])
       setAccuracyHistory([])
     }
+
+    if (trainingProgress.epoch === 0 && !isTraining && (lossHistory.length > 0 || accuracyHistory.length > 0)) {
+      console.log("[v0] Training reset - clearing charts")
+      setLossHistory([])
+      setAccuracyHistory([])
+    }
+
     lastTrainingState.current = isTraining
 
     if (trainingProgress.epoch > 0 && isTraining) {
       setLossHistory((prev) => {
         const newPoint = { step: trainingProgress.epoch, value: trainingProgress.loss }
-        const updated = [...prev.slice(-99), newPoint]
+        const updated = [...prev.slice(-100), newPoint]
         return updated
       })
 
       setAccuracyHistory((prev) => {
         const newPoint = { step: trainingProgress.epoch, value: trainingProgress.accuracy }
-        const updated = [...prev.slice(-99), newPoint]
+        const updated = [...prev.slice(-100), newPoint]
         return updated
       })
     }
-  }, [trainingProgress, isTraining])
+  }, [trainingProgress, isTraining, lossHistory.length, accuracyHistory.length])
 
   return (
     <div className="grid grid-cols-2 gap-4">
