@@ -31,7 +31,7 @@ export function NetworkInspector() {
           <div>
             <div className="text-xs text-muted-foreground">Layers</div>
             <div className="space-y-1">
-              {network.layers.map((layer, i) => (
+              {network.layers.map((layer) => (
                 <div key={layer.id} className="text-xs bg-muted/50 p-2 rounded">
                   <div className="font-medium">{layer.name}</div>
                   <div className="text-muted-foreground">{layer.size} neurons</div>

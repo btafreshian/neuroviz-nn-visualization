@@ -197,9 +197,8 @@ export function backward(
   lossFunction.backward(predictions, targets, net.gradients[outputLayerIdx])
 
   // Backpropagate through layers
-  for (let i = outputLayerIdx; i >= 1; i--) {
-    const layer = net.layers[i]
-    const prevLayer = net.layers[i - 1]
+    for (let i = outputLayerIdx; i >= 1; i--) {
+      const layer = net.layers[i]
 
     const currentGradients = net.gradients[i]
     const prevGradients = net.gradients[i - 1]

@@ -27,7 +27,6 @@ export function NeuronNode({
   onEndConnection,
 }: NeuronNodeProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [animatedActivation, setAnimatedActivation] = useState(0)
 
   const { activations, isTraining } = useTraining()
@@ -64,7 +63,6 @@ export function NeuronNode({
       } else {
         onSelect()
         setIsDragging(true)
-        setDragStart({ x: e.clientX, y: e.clientY })
       }
     }
   }
