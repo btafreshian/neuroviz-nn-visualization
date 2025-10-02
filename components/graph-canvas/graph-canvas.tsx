@@ -24,7 +24,7 @@ export function GraphCanvas() {
       console.log("[v0] GraphCanvas: fitting network to view")
       fitToNetwork()
     }
-  }, [network.layers.length])
+  }, [fitToNetwork, network.layers.length])
 
   // Handle canvas interactions
   const handleMouseDown = useCallback(

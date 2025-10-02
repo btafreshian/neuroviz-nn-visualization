@@ -68,7 +68,7 @@ export const tanh: ActivationFunction = {
 // Linear activation (identity)
 export const linear: ActivationFunction = {
   forward: (x: number) => x,
-  backward: (x: number) => 1,
+  backward: () => 1,
   forwardArray: (input: Float32Array, output: Float32Array) => {
     for (let i = 0; i < input.length; i++) {
       output[i] = input[i]

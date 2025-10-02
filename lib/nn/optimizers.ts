@@ -17,7 +17,10 @@ export interface Optimizer {
 
 // Stochastic Gradient Descent
 export const sgd: Optimizer = {
-  initialize: (paramCount: number) => ({}),
+  initialize: (paramCount: number) => {
+    void paramCount
+    return {}
+  },
   update: (params: Float32Array, gradients: Float32Array, state: OptimizerState, learningRate: number) => {
     for (let i = 0; i < params.length; i++) {
       params[i] -= learningRate * gradients[i]
