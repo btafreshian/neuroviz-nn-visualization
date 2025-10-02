@@ -42,46 +42,65 @@ function PlaygroundContent() {
         </div>
       </header>
 
-      <div className="flex-1 flex">
-        {/* Main Canvas Area */}
-        <main className="flex-1 flex flex-col">
-          <GraphCanvas />
-          <TrainingControls />
-        </main>
+      <div className="flex-1 overflow-hidden p-4 gap-4 grid grid-cols-[1fr_320px]">
+        {/* Left side - Network visualization and controls */}
+        <div className="flex flex-col gap-4 min-h-0 overflow-y-auto">
+          {/* Network visualization - fixed height with padding */}
+          <div className="bg-card border rounded-lg p-8 h-[450px] flex-shrink-0">
+            <GraphCanvas />
+          </div>
 
-        {/* Right Inspector Panel */}
-        <aside className="w-80 border-l bg-card overflow-y-auto">
-          <div className="p-4 space-y-4">
-            <NetworkInspector />
-            <DatasetManager />
-            <HyperparameterPanel />
+          {/* Training controls */}
+          <div className="bg-card border rounded-lg flex-shrink-0">
+            <TrainingControls />
+          </div>
 
-            <div>
-              <h4 className="font-medium mb-3">Training Progress</h4>
-              <TrainingCharts />
+          {/* Training Progress and Decision Boundary independently scrollable */}
+          <div className="grid grid-cols-2 gap-4 flex-shrink-0">
+            <div className="bg-card border rounded-lg flex flex-col h-[500px]">
+              <h4 className="font-medium p-4 pb-2 flex-shrink-0">Training Progress</h4>
+              <div className="overflow-y-auto flex-1 px-4 pb-4">
+                <TrainingCharts />
+              </div>
             </div>
 
-            <div>
-              <h4 className="font-medium mb-3">Visualization</h4>
-              <DecisionBoundary />
-            </div>
-
-            {/* Network stats */}
-            <div className="bg-muted/50 p-3 rounded-lg">
-              <h4 className="text-sm font-medium mb-2">Network Stats</h4>
-              <div className="space-y-1 text-xs">
-                <div>Layers: {network.layers.length}</div>
-                <div>
-                  Total Parameters:{" "}
-                  {network.layers.reduce((total, layer, i) => {
-                    if (i === 0) return total
-                    return total + network.layers[i - 1].size * layer.size + layer.size
-                  }, 0)}
-                </div>
+            <div className="bg-card border rounded-lg flex flex-col h-[500px]">
+              <h4 className="font-medium p-4 pb-2 flex-shrink-0">Decision Boundary</h4>
+              <div className="overflow-y-auto flex-1 px-4 pb-4">
+                <DecisionBoundary />
               </div>
             </div>
           </div>
-        </aside>
+        </div>
+
+        {/* Right side - Inspector panels */}
+        <div className="flex flex-col gap-4 overflow-y-auto">
+          <div className="bg-card border rounded-lg p-4">
+            <NetworkInspector />
+          </div>
+
+          <div className="bg-card border rounded-lg p-4">
+            <DatasetManager />
+          </div>
+
+          <div className="bg-card border rounded-lg p-4">
+            <HyperparameterPanel />
+          </div>
+
+          <div className="bg-card border rounded-lg p-4">
+            <h4 className="text-sm font-medium mb-2">Network Stats</h4>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div>Layers: {network.layers.length}</div>
+              <div>
+                Total Parameters:{" "}
+                {network.layers.reduce((total, layer, i) => {
+                  if (i === 0) return total
+                  return total + network.layers[i - 1].size * layer.size + layer.size
+                }, 0)}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

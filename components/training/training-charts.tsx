@@ -43,7 +43,7 @@ export function TrainingCharts() {
         return updated
       })
     }
-  }, [trainingProgress, isTraining, lossHistory.length, accuracyHistory.length])
+  }, [trainingProgress, isTraining])
 
   return (
     <div className="grid grid-cols-2 gap-4">
