@@ -37,9 +37,6 @@ export function GraphCanvas() {
   const maxLayerSize = Math.max(...network.layers.map((l) => l.size))
   const networkHeight = maxLayerSize * 40 + 120
 
-  console.log("[v0] Network dimensions:", { networkWidth, networkHeight, maxLayerSize })
-  console.log("[v0] Number of layers:", network.layers.length)
-
   return (
     <div className="h-full flex items-center justify-center overflow-hidden p-4">
       <div className="relative" style={{ width: networkWidth, height: networkHeight }}>
@@ -51,6 +48,31 @@ export function GraphCanvas() {
           viewBox={`0 0 ${networkWidth} ${networkHeight}`}
           style={{ width: networkWidth, height: networkHeight }}
         >
+          {network.layers[0] && (
+            <>
+              {Array.from({ length: network.layers[0].size }).map((_, i) => {
+                const pos = getNeuronPosition(0, i, network.layers[0].size)
+                const edgeLength = 50
+                const opacity = isTraining ? 0.4 + trainingProgress.accuracy * 0.4 : 0.5
+
+                return (
+                  <line
+                    key={`input-${i}`}
+                    x1={pos.x - edgeLength}
+                    y1={pos.y + networkHeight / 2}
+                    x2={pos.x}
+                    y2={pos.y + networkHeight / 2}
+                    stroke="#94a3b8"
+                    strokeWidth="2"
+                    opacity={opacity}
+                    className="transition-opacity duration-300"
+                  />
+                )
+              })}
+            </>
+          )}
+
+          {/* Edges between layers */}
           {network.layers.slice(0, -1).map((layer, layerIndex) => {
             const nextLayer = network.layers[layerIndex + 1]
             const connections = []
@@ -66,10 +88,6 @@ export function GraphCanvas() {
                 const y1 = pos1.y + networkHeight / 2
                 const x2 = pos2.x
                 const y2 = pos2.y + networkHeight / 2
-
-                if (layerIndex === 0 && i === 0 && j === 0) {
-                  console.log("[v0] First edge coordinates:", { x1, y1, x2, y2, opacity })
-                }
 
                 connections.push(
                   <line
@@ -88,6 +106,34 @@ export function GraphCanvas() {
             }
             return connections
           })}
+
+          {network.layers.length > 0 && (
+            <>
+              {Array.from({ length: network.layers[network.layers.length - 1].size }).map((_, i) => {
+                const pos = getNeuronPosition(
+                  network.layers.length - 1,
+                  i,
+                  network.layers[network.layers.length - 1].size,
+                )
+                const edgeLength = 50
+                const opacity = isTraining ? 0.4 + trainingProgress.accuracy * 0.4 : 0.5
+
+                return (
+                  <line
+                    key={`output-${i}`}
+                    x1={pos.x}
+                    y1={pos.y + networkHeight / 2}
+                    x2={pos.x + edgeLength}
+                    y2={pos.y + networkHeight / 2}
+                    stroke="#94a3b8"
+                    strokeWidth="2"
+                    opacity={opacity}
+                    className="transition-opacity duration-300"
+                  />
+                )
+              })}
+            </>
+          )}
         </svg>
 
         {/* Neurons */}
