@@ -1,7 +1,6 @@
 "use client"
 
 import type { NetworkState, TrainConfig, Dataset, TrainingMetrics } from "@/lib/types/neural-network"
-import type { TrainingWorkerResponse } from "@/lib/types/training-worker"
 
 export type TrainingStatus = "idle" | "training" | "paused" | "error" | "complete"
 
@@ -35,13 +34,13 @@ export class TrainingManager {
   private initializeWorker() {
     try {
       // Create worker from the training worker file
-        this.worker = new Worker(new URL("../workers/training.worker.ts", import.meta.url), {
-          type: "module",
-        })
+      this.worker = new Worker(new URL("../workers/training.worker.ts", import.meta.url), {
+        type: "module",
+      })
 
-        this.worker.onmessage = (event: MessageEvent<TrainingWorkerResponse>) => {
-          this.handleWorkerMessage(event.data)
-        }
+      this.worker.onmessage = (event) => {
+        this.handleWorkerMessage(event.data)
+      }
 
       this.worker.onerror = (error) => {
         this.updateState({
@@ -58,7 +57,7 @@ export class TrainingManager {
     }
   }
 
-    private handleWorkerMessage(message: TrainingWorkerResponse) {
+  private handleWorkerMessage(message: any) {
     switch (message.type) {
       case "UPDATE":
         this.updateState({
@@ -123,12 +122,12 @@ export class TrainingManager {
       return
     }
 
-      this.worker.postMessage({
-        type: "START",
-        network,
-        config,
-        dataset,
-      })
+    this.worker.postMessage({
+      type: "START",
+      network,
+      config,
+      dataset,
+    })
 
     this.updateState({
       status: "training",

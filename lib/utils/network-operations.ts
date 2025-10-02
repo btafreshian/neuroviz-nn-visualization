@@ -1,13 +1,13 @@
-import type { Activation, NetworkState, NNNode, NNEdge } from "@/lib/types/neural-network"
+import type { NetworkState, NNNode, NNEdge } from "@/lib/types/neural-network"
 import { createLayer, createNode, createEdge } from "./network-factory"
 
 // Layer operations
 export function addLayer(
   network: NetworkState,
-  layerConfig: { type: "dense"; units: number; activation?: Activation },
+  layerConfig: { type: "dense"; units: number; activation?: string },
   insertIndex?: number,
 ): NetworkState {
-  const newLayer = createLayer(layerConfig.type, layerConfig.units, layerConfig.activation)
+  const newLayer = createLayer(layerConfig.type, layerConfig.units, layerConfig.activation as any)
 
   const layers = [...network.layers]
   const nodes = { ...network.nodes }

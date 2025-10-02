@@ -2,7 +2,6 @@
 // This runs in a separate thread to keep the UI responsive
 
 import type { NetworkState, TrainConfig, Dataset, TrainingMetrics } from "@/lib/types/neural-network"
-import type { TrainingWorkerRequest, TrainingWorkerResponse } from "@/lib/types/training-worker"
 import { compileNetwork, forward, backward, updateParameters, predict } from "@/lib/nn/network"
 import { splitData, oneHotEncode } from "@/lib/nn/data-utils"
 import type { NetworkComputation } from "@/lib/nn/network"
@@ -17,8 +16,33 @@ let trainConfig: TrainConfig | null = null
 let trainData: { features: number[][]; labels: number[] } | null = null
 let valData: { features: number[][]; labels: number[] } | null = null
 
+// Message types from main thread
+type WorkerMessage =
+  | { type: "START"; network: NetworkState; config: TrainConfig; dataset: Dataset }
+  | { type: "PAUSE" }
+  | { type: "RESUME" }
+  | { type: "STEP" }
+  | { type: "RESET" }
+  | { type: "STOP" }
+
+// Message types to main thread
+type WorkerResponse =
+  | {
+      type: "UPDATE"
+      weights: Array<[string, number]>
+      biases: Array<[string, number]>
+      gradients?: Array<[string, number]>
+      activations?: Array<[string, number]>
+      metrics: TrainingMetrics
+    }
+  | { type: "EPOCH_COMPLETE"; epoch: number; metrics: TrainingMetrics }
+  | { type: "TRAINING_COMPLETE"; finalMetrics: TrainingMetrics }
+  | { type: "ERROR"; message: string }
+  | { type: "PAUSED" }
+  | { type: "STOPPED" }
+
 // Handle messages from main thread
-self.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
+self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   const message = event.data
 
   try {
@@ -46,7 +70,7 @@ self.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     postMessage({
       type: "ERROR",
       message: error instanceof Error ? error.message : "Unknown error occurred",
-    } as TrainingWorkerResponse)
+    } as WorkerResponse)
   }
 }
 
@@ -75,13 +99,13 @@ function startTraining(network: NetworkState, config: TrainConfig, dataset: Data
     postMessage({
       type: "ERROR",
       message: error instanceof Error ? error.message : "Failed to start training",
-    } as TrainingWorkerResponse)
+    } as WorkerResponse)
   }
 }
 
 function pauseTraining() {
   shouldPause = true
-  postMessage({ type: "PAUSED" } as TrainingWorkerResponse)
+  postMessage({ type: "PAUSED" } as WorkerResponse)
 }
 
 function resumeTraining() {
@@ -100,7 +124,7 @@ function stepTraining() {
     postMessage({
       type: "ERROR",
       message: error instanceof Error ? error.message : "Error during training step",
-    } as TrainingWorkerResponse)
+    } as WorkerResponse)
   }
 }
 
@@ -113,12 +137,12 @@ function resetTraining() {
   trainConfig = null
   trainData = null
   valData = null
-  postMessage({ type: "STOPPED" } as TrainingWorkerResponse)
+  postMessage({ type: "STOPPED" } as WorkerResponse)
 }
 
 function stopTraining() {
   isTraining = false
-  postMessage({ type: "STOPPED" } as TrainingWorkerResponse)
+  postMessage({ type: "STOPPED" } as WorkerResponse)
 }
 
 // Main training loop
@@ -141,12 +165,12 @@ function trainingLoop() {
 
       if (currentStep % totalBatches === 0) {
         currentEpoch++
-        postMessage({ type: "EPOCH_COMPLETE", epoch: currentEpoch, metrics } as TrainingWorkerResponse)
+        postMessage({ type: "EPOCH_COMPLETE", epoch: currentEpoch, metrics } as WorkerResponse)
 
         // Check if training is complete
         if (currentEpoch >= trainConfig.epochs) {
           isTraining = false
-          postMessage({ type: "TRAINING_COMPLETE", finalMetrics: metrics } as TrainingWorkerResponse)
+          postMessage({ type: "TRAINING_COMPLETE", finalMetrics: metrics } as WorkerResponse)
           return
         }
       }
@@ -165,7 +189,7 @@ function trainingLoop() {
     postMessage({
       type: "ERROR",
       message: error instanceof Error ? error.message : "Error in training loop",
-    } as TrainingWorkerResponse)
+    } as WorkerResponse)
   }
 }
 
@@ -309,12 +333,12 @@ function sendUpdate(metrics: TrainingMetrics) {
     })
   })
 
-    postMessage({
-      type: "UPDATE",
-      weights,
-      biases,
-      gradients,
-      activations,
-      metrics,
-    } as TrainingWorkerResponse)
-  }
+  postMessage({
+    type: "UPDATE",
+    weights,
+    biases,
+    gradients,
+    activations,
+    metrics,
+  } as WorkerResponse)
+}
