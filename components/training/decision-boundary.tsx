@@ -86,12 +86,10 @@ export function DecisionBoundary() {
           const idx = (py * width + px) * 4
 
           if (prediction > 0.5) {
-            // Class 1 - Orange/amber tones
             data[idx] = 251
             data[idx + 1] = 191
             data[idx + 2] = 36
           } else {
-            // Class 0 - Blue tones
             data[idx] = 59
             data[idx + 1] = 130
             data[idx + 2] = 246
@@ -159,12 +157,12 @@ export function DecisionBoundary() {
 
         <div className="flex justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-amber-400" />
-            <span>Class 1</span>
+            <div className="w-3 h-3 rounded-full bg-blue-500" />
+            <span>Class A</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span>Class 0</span>
+            <div className="w-3 h-3 rounded-full bg-amber-400" />
+            <span>Class B</span>
           </div>
         </div>
 

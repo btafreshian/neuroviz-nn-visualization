@@ -37,10 +37,10 @@ export function GraphCanvas() {
     // At epoch 0, transitionFactor = 0 (uniform appearance), at later epochs it increases
     const transitionFactor = Math.min(1, trainingProgress.epoch / 20) // Gradually transition over first 20 epochs
 
-    const targetStrokeWidth = Math.max(0.5, Math.min(4, absWeight * 3))
+    const targetStrokeWidth = Math.max(0.5, Math.min(3.6, absWeight * 3))
     const strokeWidth = 2 + (targetStrokeWidth - 2) * transitionFactor
 
-    const targetColor = weight >= 0 ? { r: 59, g: 130, b: 246 } : { r: 239, g: 68, b: 68 }
+    const targetColor = weight >= 0 ? { r: 59, g: 130, b: 246 } : { r: 251, g: 191, b: 36 }
     const greyColor = { r: 156, g: 163, b: 175 } // grey-400
 
     // Interpolate between grey and target color
@@ -103,6 +103,21 @@ export function GraphCanvas() {
           viewBox={`0 0 ${networkWidth} ${networkHeight}`}
           style={{ width: networkWidth, height: networkHeight }}
         >
+          <defs>
+            <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.9" />
+            </linearGradient>
+            <linearGradient id="amberGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgb(251, 191, 36)" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="rgb(251, 191, 36)" stopOpacity="0.9" />
+            </linearGradient>
+            <linearGradient id="greyGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgb(156, 163, 175)" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="rgb(156, 163, 175)" stopOpacity="0.5" />
+            </linearGradient>
+          </defs>
+
           {network.layers[0] && (
             <>
               {Array.from({ length: network.layers[0].size }).map((_, i) => {
@@ -205,7 +220,7 @@ export function GraphCanvas() {
 
               let neuronColor = "bg-blue-500 border-blue-600"
               if (layer.type === "input") neuronColor = "bg-green-500 border-green-600"
-              if (layer.type === "output") neuronColor = "bg-blue-500 border-blue-600"
+              if (layer.type === "output") neuronColor = "bg-amber-400 border-amber-500"
 
               const brightness = isTraining ? 0.7 + trainingProgress.accuracy * 0.3 : 1
 
@@ -270,7 +285,7 @@ export function GraphCanvas() {
                   {getIncomingWeights(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex).map((weight, idx) => (
                     <div key={idx} className="flex justify-between font-mono">
                       <span className="text-muted-foreground">w{idx + 1}:</span>
-                      <span className={weight >= 0 ? "text-blue-500" : "text-red-500"}>{weight.toFixed(4)}</span>
+                      <span className={weight >= 0 ? "text-blue-500" : "text-amber-400"}>{weight.toFixed(4)}</span>
                     </div>
                   ))}
                 </div>
@@ -282,7 +297,7 @@ export function GraphCanvas() {
                       className={
                         getBias(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex) >= 0
                           ? "text-blue-500"
-                          : "text-red-500"
+                          : "text-amber-400"
                       }
                     >
                       {getBias(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex).toFixed(4)}
