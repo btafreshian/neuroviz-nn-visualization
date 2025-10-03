@@ -43,6 +43,11 @@ export interface WeightMatrix {
   toLayerIndex: number
 }
 
+export interface BiasVector {
+  biases: number[] // [neuron_index]
+  layerIndex: number
+}
+
 interface NetworkContextType {
   network: Network
   dataset: Dataset | null
@@ -50,6 +55,7 @@ interface NetworkContextType {
   isTraining: boolean
   trainingProgress: TrainingProgress
   weights: WeightMatrix[]
+  biases: BiasVector[]
   loadTemplate: (template: string) => void
   updateLayer: (layerId: string, updates: Partial<NNLayer>) => void
   updateTrainingConfig: (config: Partial<TrainingConfig>) => void
@@ -95,12 +101,10 @@ const initializeWeights = (layers: NNLayer[]): WeightMatrix[] => {
     const toSize = layers[i + 1].size
     const weights: number[][] = []
 
-    // Initialize with small random weights
     for (let from = 0; from < fromSize; from++) {
       weights[from] = []
       for (let to = 0; to < toSize; to++) {
-        // Xavier initialization
-        weights[from][to] = (Math.random() - 0.5) * 2 * Math.sqrt(2 / (fromSize + toSize))
+        weights[from][to] = 0.3
       }
     }
 
@@ -114,12 +118,34 @@ const initializeWeights = (layers: NNLayer[]): WeightMatrix[] => {
   return weightMatrices
 }
 
+const initializeBiases = (layers: NNLayer[]): BiasVector[] => {
+  const biasVectors: BiasVector[] = []
+
+  // Skip input layer (index 0), start from first hidden layer
+  for (let i = 1; i < layers.length; i++) {
+    const biases: number[] = []
+
+    for (let j = 0; j < layers[i].size; j++) {
+      biases[j] = 0.0
+    }
+
+    biasVectors.push({
+      biases,
+      layerIndex: i,
+    })
+  }
+
+  return biasVectors
+}
+
 const updateWeights = (currentWeights: WeightMatrix[], progress: number, learningRate: number): WeightMatrix[] => {
   return currentWeights.map((matrix) => {
-    const updatedWeights = matrix.weights.map((fromWeights) =>
-      fromWeights.map((weight) => {
-        // Simulate weight updates with some randomness
-        const delta = (Math.random() - 0.5) * learningRate * (1 - progress)
+    const updatedWeights = matrix.weights.map((fromWeights, fromIdx) =>
+      fromWeights.map((weight, toIdx) => {
+        // Use a combination of random walk and directional bias based on neuron indices
+        const directionBias = (fromIdx - toIdx) * 0.1 // Creates some structure in weight changes
+        const randomComponent = (Math.random() - 0.5) * 2 // Range: -1 to 1
+        const delta = (randomComponent + directionBias) * learningRate * 10 * (1 - progress * 0.5)
         return weight + delta
       }),
     )
@@ -131,10 +157,27 @@ const updateWeights = (currentWeights: WeightMatrix[], progress: number, learnin
   })
 }
 
+const updateBiases = (currentBiases: BiasVector[], progress: number, learningRate: number): BiasVector[] => {
+  return currentBiases.map((vector) => {
+    const updatedBiases = vector.biases.map((bias, idx) => {
+      const directionBias = (idx % 2 === 0 ? 1 : -1) * 0.05 // Alternate positive/negative bias
+      const randomComponent = (Math.random() - 0.5) * 2
+      const delta = (randomComponent + directionBias) * learningRate * 5 * (1 - progress * 0.5)
+      return bias + delta
+    })
+
+    return {
+      ...vector,
+      biases: updatedBiases,
+    }
+  })
+}
+
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<Network>({ layers: [] })
   const [dataset, setDatasetState] = useState<Dataset | null>(createDefaultDataset())
   const [weights, setWeights] = useState<WeightMatrix[]>([])
+  const [biases, setBiases] = useState<BiasVector[]>([])
   const [trainConfig, setTrainConfig] = useState<TrainingConfig>({
     learningRate: 0.01,
     epochs: 100,
@@ -163,6 +206,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       console.log("[v0] Created network with layers:", newNetwork.layers)
       setNetwork(newNetwork)
       setWeights(initializeWeights(newNetwork.layers))
+      setBiases(initializeBiases(newNetwork.layers))
       setTrainingProgress({ epoch: 0, loss: 0, accuracy: 0 })
       console.log("[v0] Network state updated")
     }
@@ -218,6 +262,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       setTrainingProgress({ epoch, loss, accuracy })
 
       setWeights((currentWeights) => updateWeights(currentWeights, progress, trainConfig.learningRate))
+      setBiases((currentBiases) => updateBiases(currentBiases, progress, trainConfig.learningRate))
 
       if (epoch >= trainConfig.epochs) {
         console.log("[v0] Training completed")
@@ -249,6 +294,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     setTrainingProgress({ epoch: 0, loss: 0, accuracy: 0 })
     if (network.layers.length > 0) {
       setWeights(initializeWeights(network.layers))
+      setBiases(initializeBiases(network.layers))
     }
   }
 
@@ -267,6 +313,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     isTraining,
     trainingProgress,
     weights,
+    biases,
     loadTemplate,
     updateLayer,
     updateTrainingConfig,

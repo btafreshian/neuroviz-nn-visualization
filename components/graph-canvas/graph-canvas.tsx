@@ -1,10 +1,18 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useNetwork } from "@/lib/context/network-context"
 
+interface HoverState {
+  layerIndex: number
+  neuronIndex: number
+  x: number
+  y: number
+}
+
 export function GraphCanvas() {
-  const { network, loadTemplate, trainingProgress, isTraining, weights } = useNetwork()
+  const { network, loadTemplate, trainingProgress, isTraining, weights, biases } = useNetwork()
+  const [hoveredNeuron, setHoveredNeuron] = useState<HoverState | null>(null)
 
   useEffect(() => {
     if (network.layers.length === 0) {
@@ -46,6 +54,28 @@ export function GraphCanvas() {
     const opacity = 0.5 + (targetOpacity - 0.5) * transitionFactor
 
     return { strokeWidth, color, opacity }
+  }
+
+  const getIncomingWeights = (layerIndex: number, neuronIndex: number): number[] => {
+    if (layerIndex === 0) return [] // Input layer has no incoming weights
+
+    const weightMatrix = weights[layerIndex - 1]
+    if (!weightMatrix) return []
+
+    // Get all weights from previous layer neurons to this neuron
+    const incomingWeights: number[] = []
+    for (let i = 0; i < weightMatrix.weights.length; i++) {
+      incomingWeights.push(weightMatrix.weights[i][neuronIndex] || 0)
+    }
+
+    return incomingWeights
+  }
+
+  const getBias = (layerIndex: number, neuronIndex: number): number => {
+    if (layerIndex === 0) return 0 // Input layer has no bias
+
+    const biasVector = biases.find((b) => b.layerIndex === layerIndex)
+    return biasVector?.biases[neuronIndex] || 0
   }
 
   if (network.layers.length === 0) {
@@ -182,12 +212,22 @@ export function GraphCanvas() {
               return (
                 <div
                   key={nodeIndex}
-                  className={`absolute w-9 h-9 rounded-full ${neuronColor} border-2 flex items-center justify-center text-white text-xs font-medium shadow-md transition-opacity`}
+                  className={`absolute w-9 h-9 rounded-full ${neuronColor} border-2 flex items-center justify-center text-white text-xs font-medium shadow-md transition-opacity cursor-pointer`}
                   style={{
                     left: `${pos.x - 18}px`,
                     top: `${pos.y + networkHeight / 2 - 18}px`,
                     opacity: brightness,
                   }}
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    setHoveredNeuron({
+                      layerIndex,
+                      neuronIndex: nodeIndex,
+                      x: pos.x + 18,
+                      y: pos.y + networkHeight / 2,
+                    })
+                  }}
+                  onMouseLeave={() => setHoveredNeuron(null)}
                   title={`${layer.name} - Neuron ${nodeIndex + 1}`}
                 >
                   {nodeIndex + 1}
@@ -209,6 +249,54 @@ export function GraphCanvas() {
             </div>
           </div>
         ))}
+
+        {hoveredNeuron && (
+          <div
+            className="absolute bg-background border border-border rounded-lg shadow-lg p-3 text-xs z-50 pointer-events-none"
+            style={{
+              left: `${hoveredNeuron.x + 10}px`,
+              top: `${hoveredNeuron.y - 40}px`,
+              minWidth: "180px",
+            }}
+          >
+            <div className="font-semibold mb-2 text-foreground">
+              {network.layers[hoveredNeuron.layerIndex].name} - Neuron {hoveredNeuron.neuronIndex + 1}
+            </div>
+
+            {hoveredNeuron.layerIndex > 0 && (
+              <>
+                <div className="text-muted-foreground mb-1">Incoming Weights:</div>
+                <div className="max-h-32 overflow-y-auto mb-2 space-y-0.5">
+                  {getIncomingWeights(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex).map((weight, idx) => (
+                    <div key={idx} className="flex justify-between font-mono">
+                      <span className="text-muted-foreground">w{idx + 1}:</span>
+                      <span className={weight >= 0 ? "text-blue-500" : "text-red-500"}>{weight.toFixed(4)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-border pt-2 mt-2">
+                  <div className="flex justify-between font-mono">
+                    <span className="text-muted-foreground">Bias:</span>
+                    <span
+                      className={
+                        getBias(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex) >= 0
+                          ? "text-blue-500"
+                          : "text-red-500"
+                      }
+                    >
+                      {getBias(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex).toFixed(4)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {hoveredNeuron.layerIndex === 0 && (
+              <div className="text-muted-foreground italic">Input neuron (no weights/bias)</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
