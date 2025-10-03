@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { useNetwork } from "@/lib/context/network-context"
 
 export function GraphCanvas() {
-  const { network, loadTemplate, trainingProgress, isTraining } = useNetwork()
+  const { network, loadTemplate, trainingProgress, isTraining, weights } = useNetwork()
 
   useEffect(() => {
     if (network.layers.length === 0) {
@@ -21,6 +21,31 @@ export function GraphCanvas() {
     const y = (neuronIndex - (layerSize - 1) / 2) * neuronSpacing
 
     return { x, y }
+  }
+
+  const getEdgeProperties = (weight: number) => {
+    const absWeight = Math.abs(weight)
+
+    // At epoch 0, transitionFactor = 0 (uniform appearance), at later epochs it increases
+    const transitionFactor = Math.min(1, trainingProgress.epoch / 20) // Gradually transition over first 20 epochs
+
+    const targetStrokeWidth = Math.max(0.5, Math.min(4, absWeight * 3))
+    const strokeWidth = 2 + (targetStrokeWidth - 2) * transitionFactor
+
+    const targetColor = weight >= 0 ? { r: 59, g: 130, b: 246 } : { r: 239, g: 68, b: 68 }
+    const greyColor = { r: 156, g: 163, b: 175 } // grey-400
+
+    // Interpolate between grey and target color
+    const r = Math.round(greyColor.r + (targetColor.r - greyColor.r) * transitionFactor)
+    const g = Math.round(greyColor.g + (targetColor.g - greyColor.g) * transitionFactor)
+    const b = Math.round(greyColor.b + (targetColor.b - greyColor.b) * transitionFactor)
+
+    const color = `rgb(${r}, ${g}, ${b})`
+
+    const targetOpacity = Math.max(0.2, Math.min(0.9, absWeight * 0.8 + 0.2))
+    const opacity = 0.5 + (targetOpacity - 0.5) * transitionFactor
+
+    return { strokeWidth, color, opacity }
   }
 
   if (network.layers.length === 0) {
@@ -53,7 +78,9 @@ export function GraphCanvas() {
               {Array.from({ length: network.layers[0].size }).map((_, i) => {
                 const pos = getNeuronPosition(0, i, network.layers[0].size)
                 const edgeLength = 50
-                const opacity = isTraining ? 0.4 + trainingProgress.accuracy * 0.4 : 0.5
+                // Simulate input edge weight
+                const weight = 0.5 + Math.random() * 0.3
+                const { strokeWidth, color, opacity } = getEdgeProperties(weight)
 
                 return (
                   <line
@@ -62,27 +89,29 @@ export function GraphCanvas() {
                     y1={pos.y + networkHeight / 2}
                     x2={pos.x}
                     y2={pos.y + networkHeight / 2}
-                    stroke="#94a3b8"
-                    strokeWidth="2"
+                    stroke={color}
+                    strokeWidth={strokeWidth}
                     opacity={opacity}
-                    className="transition-opacity duration-300"
+                    className="transition-all duration-300"
                   />
                 )
               })}
             </>
           )}
 
-          {/* Edges between layers */}
           {network.layers.slice(0, -1).map((layer, layerIndex) => {
             const nextLayer = network.layers[layerIndex + 1]
             const connections = []
+            const weightMatrix = weights[layerIndex]
 
             for (let i = 0; i < layer.size; i++) {
               for (let j = 0; j < nextLayer.size; j++) {
                 const pos1 = getNeuronPosition(layerIndex, i, layer.size)
                 const pos2 = getNeuronPosition(layerIndex + 1, j, nextLayer.size)
 
-                const opacity = isTraining ? 0.4 + trainingProgress.accuracy * 0.4 : 0.5
+                // Get weight value from matrix
+                const weight = weightMatrix?.weights[i]?.[j] ?? 0
+                const { strokeWidth, color, opacity } = getEdgeProperties(weight)
 
                 const x1 = pos1.x
                 const y1 = pos1.y + networkHeight / 2
@@ -96,10 +125,10 @@ export function GraphCanvas() {
                     y1={y1}
                     x2={x2}
                     y2={y2}
-                    stroke="#94a3b8"
-                    strokeWidth="2"
+                    stroke={color}
+                    strokeWidth={strokeWidth}
                     opacity={opacity}
-                    className="transition-opacity duration-300"
+                    className="transition-all duration-300"
                   />,
                 )
               }
@@ -116,7 +145,9 @@ export function GraphCanvas() {
                   network.layers[network.layers.length - 1].size,
                 )
                 const edgeLength = 50
-                const opacity = isTraining ? 0.4 + trainingProgress.accuracy * 0.4 : 0.5
+                // Simulate output edge weight
+                const weight = 0.5 + Math.random() * 0.3
+                const { strokeWidth, color, opacity } = getEdgeProperties(weight)
 
                 return (
                   <line
@@ -125,10 +156,10 @@ export function GraphCanvas() {
                     y1={pos.y + networkHeight / 2}
                     x2={pos.x + edgeLength}
                     y2={pos.y + networkHeight / 2}
-                    stroke="#94a3b8"
-                    strokeWidth="2"
+                    stroke={color}
+                    strokeWidth={strokeWidth}
                     opacity={opacity}
-                    className="transition-opacity duration-300"
+                    className="transition-all duration-300"
                   />
                 )
               })}

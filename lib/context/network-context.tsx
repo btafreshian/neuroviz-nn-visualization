@@ -37,12 +37,19 @@ export interface TrainingProgress {
   accuracy: number
 }
 
+export interface WeightMatrix {
+  weights: number[][] // [from_neuron][to_neuron]
+  fromLayerIndex: number
+  toLayerIndex: number
+}
+
 interface NetworkContextType {
   network: Network
   dataset: Dataset | null
   trainConfig: TrainingConfig
   isTraining: boolean
   trainingProgress: TrainingProgress
+  weights: WeightMatrix[]
   loadTemplate: (template: string) => void
   updateLayer: (layerId: string, updates: Partial<NNLayer>) => void
   updateTrainingConfig: (config: Partial<TrainingConfig>) => void
@@ -80,9 +87,54 @@ const createDefaultDataset = (): Dataset => ({
   outputSize: 1,
 })
 
+const initializeWeights = (layers: NNLayer[]): WeightMatrix[] => {
+  const weightMatrices: WeightMatrix[] = []
+
+  for (let i = 0; i < layers.length - 1; i++) {
+    const fromSize = layers[i].size
+    const toSize = layers[i + 1].size
+    const weights: number[][] = []
+
+    // Initialize with small random weights
+    for (let from = 0; from < fromSize; from++) {
+      weights[from] = []
+      for (let to = 0; to < toSize; to++) {
+        // Xavier initialization
+        weights[from][to] = (Math.random() - 0.5) * 2 * Math.sqrt(2 / (fromSize + toSize))
+      }
+    }
+
+    weightMatrices.push({
+      weights,
+      fromLayerIndex: i,
+      toLayerIndex: i + 1,
+    })
+  }
+
+  return weightMatrices
+}
+
+const updateWeights = (currentWeights: WeightMatrix[], progress: number, learningRate: number): WeightMatrix[] => {
+  return currentWeights.map((matrix) => {
+    const updatedWeights = matrix.weights.map((fromWeights) =>
+      fromWeights.map((weight) => {
+        // Simulate weight updates with some randomness
+        const delta = (Math.random() - 0.5) * learningRate * (1 - progress)
+        return weight + delta
+      }),
+    )
+
+    return {
+      ...matrix,
+      weights: updatedWeights,
+    }
+  })
+}
+
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<Network>({ layers: [] })
   const [dataset, setDatasetState] = useState<Dataset | null>(createDefaultDataset())
+  const [weights, setWeights] = useState<WeightMatrix[]>([])
   const [trainConfig, setTrainConfig] = useState<TrainingConfig>({
     learningRate: 0.01,
     epochs: 100,
@@ -110,6 +162,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       const newNetwork = createClassificationNetwork()
       console.log("[v0] Created network with layers:", newNetwork.layers)
       setNetwork(newNetwork)
+      setWeights(initializeWeights(newNetwork.layers))
       setTrainingProgress({ epoch: 0, loss: 0, accuracy: 0 })
       console.log("[v0] Network state updated")
     }
@@ -164,6 +217,8 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       )
       setTrainingProgress({ epoch, loss, accuracy })
 
+      setWeights((currentWeights) => updateWeights(currentWeights, progress, trainConfig.learningRate))
+
       if (epoch >= trainConfig.epochs) {
         console.log("[v0] Training completed")
         setIsTraining(false)
@@ -192,6 +247,9 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     }
     setIsTraining(false)
     setTrainingProgress({ epoch: 0, loss: 0, accuracy: 0 })
+    if (network.layers.length > 0) {
+      setWeights(initializeWeights(network.layers))
+    }
   }
 
   useEffect(() => {
@@ -208,6 +266,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     trainConfig,
     isTraining,
     trainingProgress,
+    weights,
     loadTemplate,
     updateLayer,
     updateTrainingConfig,

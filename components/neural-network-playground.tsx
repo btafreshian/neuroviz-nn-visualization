@@ -86,20 +86,6 @@ function PlaygroundContent() {
           <div className="bg-card border rounded-lg p-4">
             <HyperparameterPanel />
           </div>
-
-          <div className="bg-card border rounded-lg p-4">
-            <h4 className="text-sm font-medium mb-2">Network Stats</h4>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <div>Layers: {network.layers.length}</div>
-              <div>
-                Total Parameters:{" "}
-                {network.layers.reduce((total, layer, i) => {
-                  if (i === 0) return total
-                  return total + network.layers[i - 1].size * layer.size + layer.size
-                }, 0)}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
