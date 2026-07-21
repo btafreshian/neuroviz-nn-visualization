@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNetwork } from "@/lib/context/network-context"
 
 interface HoverState {
@@ -10,309 +10,273 @@ interface HoverState {
   y: number
 }
 
+const LAYER_SPACING = 180
+const NEURON_SPACING = 40
+const NEURON_RADIUS = 18
+
 export function GraphCanvas() {
-  const { network, loadTemplate, trainingProgress, isTraining, weights, biases } = useNetwork()
+  const { network, visualizationState, selectedSampleIndex } = useNetwork()
+  const { weights, biases, weightDeltas, trace, telemetry, isHistorical } = visualizationState
   const [hoveredNeuron, setHoveredNeuron] = useState<HoverState | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
-    if (network.layers.length === 0) {
-      loadTemplate("classification")
+    const container = containerRef.current
+    if (!container) return
+    const updateSize = () => {
+      const bounds = container.getBoundingClientRect()
+      setViewportSize({ width: bounds.width, height: bounds.height })
     }
-  }, [network.layers.length, loadTemplate])
-
-  const getNeuronPosition = (layerIndex: number, neuronIndex: number, layerSize: number) => {
-    const layerSpacing = 180
-    const neuronSpacing = 40
-    const neuronRadius = 18
-
-    const x = layerIndex * layerSpacing + neuronRadius + 60
-    const y = (neuronIndex - (layerSize - 1) / 2) * neuronSpacing
-
-    return { x, y }
-  }
-
-  const getEdgeProperties = (weight: number) => {
-    const absWeight = Math.abs(weight)
-
-    // At epoch 0, transitionFactor = 0 (uniform appearance), at later epochs it increases
-    const transitionFactor = Math.min(1, trainingProgress.epoch / 20) // Gradually transition over first 20 epochs
-
-    const targetStrokeWidth = Math.max(0.5, Math.min(3.6, absWeight * 3))
-    const strokeWidth = 2 + (targetStrokeWidth - 2) * transitionFactor
-
-    const targetColor = weight >= 0 ? { r: 59, g: 130, b: 246 } : { r: 251, g: 191, b: 36 }
-    const greyColor = { r: 156, g: 163, b: 175 } // grey-400
-
-    // Interpolate between grey and target color
-    const r = Math.round(greyColor.r + (targetColor.r - greyColor.r) * transitionFactor)
-    const g = Math.round(greyColor.g + (targetColor.g - greyColor.g) * transitionFactor)
-    const b = Math.round(greyColor.b + (targetColor.b - greyColor.b) * transitionFactor)
-
-    const color = `rgb(${r}, ${g}, ${b})`
-
-    const targetOpacity = Math.max(0.2, Math.min(0.9, absWeight * 0.8 + 0.2))
-    const opacity = 0.5 + (targetOpacity - 0.5) * transitionFactor
-
-    return { strokeWidth, color, opacity }
-  }
-
-  const getIncomingWeights = (layerIndex: number, neuronIndex: number): number[] => {
-    if (layerIndex === 0) return [] // Input layer has no incoming weights
-
-    const weightMatrix = weights[layerIndex - 1]
-    if (!weightMatrix) return []
-
-    // Get all weights from previous layer neurons to this neuron
-    const incomingWeights: number[] = []
-    for (let i = 0; i < weightMatrix.weights.length; i++) {
-      incomingWeights.push(weightMatrix.weights[i][neuronIndex] || 0)
-    }
-
-    return incomingWeights
-  }
-
-  const getBias = (layerIndex: number, neuronIndex: number): number => {
-    if (layerIndex === 0) return 0 // Input layer has no bias
-
-    const biasVector = biases.find((b) => b.layerIndex === layerIndex)
-    return biasVector?.biases[neuronIndex] || 0
-  }
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   if (network.layers.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <p className="text-sm">Loading network...</p>
-        </div>
-      </div>
-    )
+    return <div ref={containerRef} className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading network…</div>
   }
 
-  const networkWidth = (network.layers.length - 1) * 180 + 160
-  const maxLayerSize = Math.max(...network.layers.map((l) => l.size))
-  const networkHeight = maxLayerSize * 40 + 120
+  const getNeuronPosition = (layerIndex: number, neuronIndex: number, layerSize: number) => ({
+    x: layerIndex * LAYER_SPACING + NEURON_RADIUS + 60,
+    y: (neuronIndex - (layerSize - 1) / 2) * NEURON_SPACING,
+  })
+  const networkWidth = (network.layers.length - 1) * LAYER_SPACING + 210
+  const maxLayerSize = Math.max(...network.layers.map((layer) => layer.size))
+  const networkHeight = maxLayerSize * NEURON_SPACING + 120
+  const stageScale = viewportSize.width > 0 && viewportSize.height > 0
+    ? Math.min(1, Math.max(0.2, Math.min((viewportSize.width - 8) / networkWidth, (viewportSize.height - 8) / networkHeight)))
+    : 1
+  const maximumUpdate = Math.max(0, ...weightDeltas.flat(2).map((value) => Math.abs(value)))
+  const maximumContribution = Math.max(0, ...(trace?.edgeContributions.flat(2).map((value) => Math.abs(value)) ?? [0]))
+
+  const isRelatedToHover = (matrixIndex: number, sourceIndex: number, targetIndex: number) =>
+    !hoveredNeuron ||
+    (hoveredNeuron.layerIndex === matrixIndex && hoveredNeuron.neuronIndex === sourceIndex) ||
+    (hoveredNeuron.layerIndex === matrixIndex + 1 && hoveredNeuron.neuronIndex === targetIndex)
 
   return (
-    <div className="h-full flex items-center justify-center overflow-hidden p-4">
-      <div className="relative" style={{ width: networkWidth, height: networkHeight }}>
-        {/* SVG for edges */}
-        <svg
-          className="absolute inset-0 pointer-events-none"
-          width={networkWidth}
-          height={networkHeight}
-          viewBox={`0 0 ${networkWidth} ${networkHeight}`}
-          style={{ width: networkWidth, height: networkHeight }}
-        >
-          <defs>
-            <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.9" />
-            </linearGradient>
-            <linearGradient id="amberGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgb(251, 191, 36)" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="rgb(251, 191, 36)" stopOpacity="0.9" />
-            </linearGradient>
-            <linearGradient id="greyGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgb(156, 163, 175)" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="rgb(156, 163, 175)" stopOpacity="0.5" />
-            </linearGradient>
-          </defs>
+    <div ref={containerRef} className="relative flex h-full w-full items-center justify-center overflow-hidden">
+      <div className="absolute left-0 top-0 z-10 flex flex-wrap gap-3 rounded-md border bg-background/90 px-2.5 py-1.5 text-[10px] text-muted-foreground shadow-sm">
+        <LegendLine color="border-blue-500" label="positive" />
+        <LegendLine color="border-amber-500" label="negative" />
+        <LegendLine color="border-slate-400" label="zero" thin />
+        <span>{trace ? "brightness = activation · emphasis = contribution" : "glow = latest update"}</span>
+      </div>
 
-          {network.layers[0] && (
-            <>
-              {Array.from({ length: network.layers[0].size }).map((_, i) => {
-                const pos = getNeuronPosition(0, i, network.layers[0].size)
-                const edgeLength = 50
-                // Simulate input edge weight
-                const weight = 0.5 + Math.random() * 0.3
-                const { strokeWidth, color, opacity } = getEdgeProperties(weight)
+      <div className="relative shrink-0" style={{ width: networkWidth * stageScale, height: networkHeight * stageScale }}>
+        <div className="absolute left-0 top-0 origin-top-left" style={{ width: networkWidth, height: networkHeight, transform: `scale(${stageScale})` }}>
+          <svg className="pointer-events-none absolute inset-0" width={networkWidth} height={networkHeight} viewBox={`0 0 ${networkWidth} ${networkHeight}`}>
+            {network.layers[0] && Array.from({ length: network.layers[0].size }).map((_, index) => {
+              const position = getNeuronPosition(0, index, network.layers[0].size)
+              return <line key={`input-${index}`} x1={position.x - 50} y1={position.y + networkHeight / 2} x2={position.x} y2={position.y + networkHeight / 2} stroke="rgb(148, 163, 184)" strokeWidth={1.25} opacity={0.45} />
+            })}
 
-                return (
-                  <line
-                    key={`input-${i}`}
-                    x1={pos.x - edgeLength}
-                    y1={pos.y + networkHeight / 2}
-                    x2={pos.x}
-                    y2={pos.y + networkHeight / 2}
-                    stroke={color}
-                    strokeWidth={strokeWidth}
-                    opacity={opacity}
-                    className="transition-all duration-300"
-                  />
-                )
-              })}
-            </>
-          )}
+            {network.layers.slice(0, -1).map((layer, matrixIndex) => {
+              const nextLayer = network.layers[matrixIndex + 1]
+              return Array.from({ length: layer.size }).flatMap((_, sourceIndex) =>
+                Array.from({ length: nextLayer.size }).map((__, targetIndex) => {
+                  const source = getNeuronPosition(matrixIndex, sourceIndex, layer.size)
+                  const target = getNeuronPosition(matrixIndex + 1, targetIndex, nextLayer.size)
+                  const weight = weights[matrixIndex]?.weights[sourceIndex]?.[targetIndex] ?? 0
+                  const update = weightDeltas[matrixIndex]?.[sourceIndex]?.[targetIndex] ?? 0
+                  const contribution = trace?.edgeContributions[matrixIndex]?.[sourceIndex]?.[targetIndex] ?? 0
+                  const sourceActivation = trace?.layers[matrixIndex]?.activations[sourceIndex] ?? 0
+                  const absoluteWeight = Math.abs(weight)
+                  const contributionStrength = maximumContribution > 0 ? Math.min(1, Math.abs(contribution) / maximumContribution) : 0
+                  const updateStrength = maximumUpdate > 0 ? Math.min(1, Math.abs(update) / maximumUpdate) : 0
+                  const related = isRelatedToHover(matrixIndex, sourceIndex, targetIndex)
+                  const color = absoluteWeight < 1e-12 ? "rgb(148, 163, 184)" : weight >= 0 ? "rgb(59, 130, 246)" : "rgb(245, 158, 11)"
+                  const baseOpacity = absoluteWeight < 1e-12 ? 0.45 : Math.max(0.2, Math.min(0.92, 0.2 + absoluteWeight * 0.55))
+                  const opacity = hoveredNeuron
+                    ? related ? Math.max(0.84, baseOpacity) : 0.06
+                    : trace ? 0.1 + contributionStrength * 0.82 : baseOpacity
+                  const strokeWidth = absoluteWeight < 1e-12 ? 1 : Math.max(0.65, Math.min(4, 0.65 + absoluteWeight * 1.5))
+                  const lineKey = `${matrixIndex}-${sourceIndex}-${targetIndex}`
+                  const sign = absoluteWeight < 1e-12 ? "zero" : weight > 0 ? "positive" : "negative"
+                  const tooltip = `Weight ${formatValue(weight)} · Sign ${sign} · Update ${formatValue(update)} · Source activation ${formatValue(sourceActivation)} · Contribution ${formatValue(contribution)}`
 
-          {network.layers.slice(0, -1).map((layer, layerIndex) => {
-            const nextLayer = network.layers[layerIndex + 1]
-            const connections = []
-            const weightMatrix = weights[layerIndex]
-
-            for (let i = 0; i < layer.size; i++) {
-              for (let j = 0; j < nextLayer.size; j++) {
-                const pos1 = getNeuronPosition(layerIndex, i, layer.size)
-                const pos2 = getNeuronPosition(layerIndex + 1, j, nextLayer.size)
-
-                // Get weight value from matrix
-                const weight = weightMatrix?.weights[i]?.[j] ?? 0
-                const { strokeWidth, color, opacity } = getEdgeProperties(weight)
-
-                const x1 = pos1.x
-                const y1 = pos1.y + networkHeight / 2
-                const x2 = pos2.x
-                const y2 = pos2.y + networkHeight / 2
-
-                connections.push(
-                  <line
-                    key={`${layerIndex}-${i}-${j}`}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                    stroke={color}
-                    strokeWidth={strokeWidth}
-                    opacity={opacity}
-                    className="transition-all duration-300"
-                  />,
-                )
-              }
-            }
-            return connections
-          })}
-
-          {network.layers.length > 0 && (
-            <>
-              {Array.from({ length: network.layers[network.layers.length - 1].size }).map((_, i) => {
-                const pos = getNeuronPosition(
-                  network.layers.length - 1,
-                  i,
-                  network.layers[network.layers.length - 1].size,
-                )
-                const edgeLength = 50
-                // Simulate output edge weight
-                const weight = 0.5 + Math.random() * 0.3
-                const { strokeWidth, color, opacity } = getEdgeProperties(weight)
-
-                return (
-                  <line
-                    key={`output-${i}`}
-                    x1={pos.x}
-                    y1={pos.y + networkHeight / 2}
-                    x2={pos.x + edgeLength}
-                    y2={pos.y + networkHeight / 2}
-                    stroke={color}
-                    strokeWidth={strokeWidth}
-                    opacity={opacity}
-                    className="transition-all duration-300"
-                  />
-                )
-              })}
-            </>
-          )}
-        </svg>
-
-        {/* Neurons */}
-        {network.layers.map((layer, layerIndex) => (
-          <div key={layer.id}>
-            {Array.from({ length: layer.size }).map((_, nodeIndex) => {
-              const pos = getNeuronPosition(layerIndex, nodeIndex, layer.size)
-
-              let neuronColor = "bg-blue-500 border-blue-600"
-              if (layer.type === "input") neuronColor = "bg-green-500 border-green-600"
-              if (layer.type === "output") neuronColor = "bg-amber-400 border-amber-500"
-
-              const brightness = isTraining ? 0.7 + trainingProgress.accuracy * 0.3 : 1
-
-              return (
-                <div
-                  key={nodeIndex}
-                  className={`absolute w-9 h-9 rounded-full ${neuronColor} border-2 flex items-center justify-center text-white text-xs font-medium shadow-md transition-opacity cursor-pointer`}
-                  style={{
-                    left: `${pos.x - 18}px`,
-                    top: `${pos.y + networkHeight / 2 - 18}px`,
-                    opacity: brightness,
-                  }}
-                  onMouseEnter={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    setHoveredNeuron({
-                      layerIndex,
-                      neuronIndex: nodeIndex,
-                      x: pos.x + 18,
-                      y: pos.y + networkHeight / 2,
-                    })
-                  }}
-                  onMouseLeave={() => setHoveredNeuron(null)}
-                  title={`${layer.name} - Neuron ${nodeIndex + 1}`}
-                >
-                  {nodeIndex + 1}
-                </div>
+                  return (
+                    <g key={lineKey}>
+                      <line
+                        x1={source.x}
+                        y1={source.y + networkHeight / 2}
+                        x2={target.x}
+                        y2={target.y + networkHeight / 2}
+                        stroke={color}
+                        strokeWidth={strokeWidth}
+                        opacity={opacity}
+                        className="pointer-events-auto cursor-help transition-all duration-200 ease-linear"
+                      >
+                        <title>{tooltip}</title>
+                      </line>
+                      {!isHistorical && telemetry.epoch > 0 && updateStrength > 0.08 && related && (
+                        <line
+                          key={`pulse-${telemetry.epoch}-${lineKey}`}
+                          x1={source.x}
+                          y1={source.y + networkHeight / 2}
+                          x2={target.x}
+                          y2={target.y + networkHeight / 2}
+                          stroke={color}
+                          strokeWidth={strokeWidth + 1.5}
+                          opacity={Math.min(0.9, updateStrength)}
+                          className="pointer-events-none"
+                          style={{ filter: `drop-shadow(0 0 ${2 + updateStrength * 4}px ${color})` }}
+                        >
+                          <animate attributeName="opacity" from={String(Math.min(0.9, updateStrength))} to="0" dur="320ms" fill="freeze" />
+                        </line>
+                      )}
+                    </g>
+                  )
+                }),
               )
             })}
 
-            {/* Layer label */}
-            <div
-              className="absolute text-center text-xs"
-              style={{
-                left: `${layerIndex * 180 + 20}px`,
-                top: `${networkHeight / 2 + ((layer.size - 1) / 2) * 40 + 40}px`,
-                width: "120px",
-              }}
-            >
-              <div className="font-medium text-foreground">{layer.name}</div>
-              <div className="text-muted-foreground">{layer.size} neurons</div>
-            </div>
-          </div>
-        ))}
+            {Array.from({ length: network.layers.at(-1)?.size ?? 0 }).map((_, index) => {
+              const lastIndex = network.layers.length - 1
+              const position = getNeuronPosition(lastIndex, index, network.layers[lastIndex].size)
+              return <line key={`output-${index}`} x1={position.x} y1={position.y + networkHeight / 2} x2={position.x + 50} y2={position.y + networkHeight / 2} stroke="rgb(148, 163, 184)" strokeWidth={1.25} opacity={0.45} />
+            })}
+          </svg>
 
-        {hoveredNeuron && (
-          <div
-            className="absolute bg-background border border-border rounded-lg shadow-lg p-3 text-xs z-50 pointer-events-none"
-            style={{
-              left: `${hoveredNeuron.x + 10}px`,
-              top: `${hoveredNeuron.y - 40}px`,
-              minWidth: "180px",
-            }}
-          >
-            <div className="font-semibold mb-2 text-foreground">
-              {network.layers[hoveredNeuron.layerIndex].name} - Neuron {hoveredNeuron.neuronIndex + 1}
-            </div>
+          {network.layers.map((layer, layerIndex) => {
+            const layerTrace = trace?.layers[layerIndex]
+            const maximumActivation = Math.max(1e-9, ...(layerTrace?.activations.map((value) => Math.abs(value)) ?? [0]))
+            const biasValues = layerTrace?.biases ?? biases[layerIndex - 1]?.biases ?? []
+            const maximumBias = Math.max(1e-9, ...biasValues.map((value) => Math.abs(value)))
 
-            {hoveredNeuron.layerIndex > 0 && (
-              <>
-                <div className="text-muted-foreground mb-1">Incoming Weights:</div>
-                <div className="max-h-32 overflow-y-auto mb-2 space-y-0.5">
-                  {getIncomingWeights(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex).map((weight, idx) => (
-                    <div key={idx} className="flex justify-between font-mono">
-                      <span className="text-muted-foreground">w{idx + 1}:</span>
-                      <span className={weight >= 0 ? "text-blue-500" : "text-amber-400"}>{weight.toFixed(4)}</span>
+            return (
+              <div key={layer.id}>
+                {Array.from({ length: layer.size }).map((_, neuronIndex) => {
+                  const position = getNeuronPosition(layerIndex, neuronIndex, layer.size)
+                  const activation = layerTrace?.activations[neuronIndex]
+                  const bias = biasValues[neuronIndex] ?? 0
+                  const activationStrength = activation === undefined ? 1 : Math.min(1, Math.abs(activation) / maximumActivation)
+                  const inactiveRelu = layer.activation === "relu" && activation === 0
+                  const saturated = (layer.activation === "tanh" && Math.abs(activation ?? 0) >= 0.95) ||
+                    (layer.activation === "sigmoid" && activation !== undefined && (activation <= 0.05 || activation >= 0.95))
+                  const identity = getLayerIdentity(layer.type)
+                  const background = activation === undefined ? identity.fill : mixWithWhite(identity.rgb, 0.18 + activationStrength * 0.82)
+                  const biasStrength = Math.min(1, Math.abs(bias) / maximumBias)
+
+                  return (
+                    <div key={neuronIndex}>
+                      <button
+                        type="button"
+                        className={`absolute flex h-9 w-9 cursor-help items-center justify-center rounded-full border-2 text-xs font-medium shadow-md transition-all duration-200 ease-linear ${identity.border}`}
+                        style={{ left: position.x - NEURON_RADIUS, top: position.y + networkHeight / 2 - NEURON_RADIUS, backgroundColor: background, color: activationStrength > 0.48 || activation === undefined ? "white" : "rgb(15, 23, 42)" }}
+                        onMouseEnter={() => setHoveredNeuron({ layerIndex, neuronIndex, x: position.x + NEURON_RADIUS, y: position.y + networkHeight / 2 })}
+                        onMouseLeave={() => setHoveredNeuron(null)}
+                        onFocus={() => setHoveredNeuron({ layerIndex, neuronIndex, x: position.x + NEURON_RADIUS, y: position.y + networkHeight / 2 })}
+                        onBlur={() => setHoveredNeuron(null)}
+                        aria-label={`${layer.name} neuron ${neuronIndex + 1}${activation === undefined ? "" : `, activation ${formatValue(activation)}`}`}
+                      >
+                        {neuronIndex + 1}
+                        {layerIndex > 0 && (
+                          <span
+                            className={`absolute -right-1 -top-1 rounded-full border border-background transition-all duration-200 ease-linear ${Math.abs(bias) < 1e-12 ? "bg-slate-400" : bias > 0 ? "bg-blue-500" : "bg-amber-500"}`}
+                            style={{ width: 5 + biasStrength * 5, height: 5 + biasStrength * 5 }}
+                            title={`Bias ${formatValue(bias)}`}
+                          />
+                        )}
+                        {(inactiveRelu || saturated) && (
+                          <span className={`absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-background ${inactiveRelu ? "bg-slate-400" : "bg-rose-500"}`} title={inactiveRelu ? "Inactive ReLU" : "Saturated activation"} />
+                        )}
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
 
-                <div className="border-t border-border pt-2 mt-2">
-                  <div className="flex justify-between font-mono">
-                    <span className="text-muted-foreground">Bias:</span>
-                    <span
-                      className={
-                        getBias(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex) >= 0
-                          ? "text-blue-500"
-                          : "text-amber-400"
-                      }
-                    >
-                      {getBias(hoveredNeuron.layerIndex, hoveredNeuron.neuronIndex).toFixed(4)}
-                    </span>
-                  </div>
+                <div className="absolute text-center text-xs" style={{ left: layerIndex * LAYER_SPACING + 20, top: networkHeight / 2 + ((layer.size - 1) / 2) * NEURON_SPACING + 40, width: 120 }}>
+                  <div className="font-medium text-foreground">{layer.name}</div>
+                  <div className="text-muted-foreground">{layer.size} neurons</div>
                 </div>
-              </>
-            )}
+              </div>
+            )
+          })}
 
-            {hoveredNeuron.layerIndex === 0 && (
-              <div className="text-muted-foreground italic">Input neuron (no weights/bias)</div>
-            )}
-          </div>
-        )}
+          {trace && (
+            <div
+              className="absolute rounded-md border bg-background/95 px-2 py-1 text-[10px] shadow-sm"
+              style={{ left: (network.layers.length - 1) * LAYER_SPACING + 108, top: networkHeight / 2 - 18 }}
+            >
+              <div className="font-semibold">Class {trace.prediction === 1 ? "B" : "A"}</div>
+              <div className="font-mono text-muted-foreground">p(B) {(trace.outputProbability * 100).toFixed(1)}%</div>
+            </div>
+          )}
+
+          {hoveredNeuron && (() => {
+            const layer = network.layers[hoveredNeuron.layerIndex]
+            const layerTrace = trace?.layers[hoveredNeuron.layerIndex]
+            const activation = layerTrace?.activations[hoveredNeuron.neuronIndex]
+            const preActivation = layerTrace?.preActivations[hoveredNeuron.neuronIndex]
+            const weightedInput = layerTrace?.weightedInputs[hoveredNeuron.neuronIndex]
+            const bias = layerTrace?.biases[hoveredNeuron.neuronIndex] ?? (hoveredNeuron.layerIndex > 0 ? biases[hoveredNeuron.layerIndex - 1]?.biases[hoveredNeuron.neuronIndex] ?? 0 : 0)
+            const incomingWeights = hoveredNeuron.layerIndex > 0
+              ? weights[hoveredNeuron.layerIndex - 1]?.weights.map((row) => row[hoveredNeuron.neuronIndex] ?? 0) ?? []
+              : []
+            const incomingContributions = hoveredNeuron.layerIndex > 0
+              ? trace?.edgeContributions[hoveredNeuron.layerIndex - 1]?.map((row) => row[hoveredNeuron.neuronIndex] ?? 0) ?? []
+              : []
+            const tooltipLeft = hoveredNeuron.x > networkWidth - 220 ? hoveredNeuron.x - 220 : hoveredNeuron.x + 10
+
+            return (
+              <div className="pointer-events-none absolute z-50 w-52 rounded-lg border bg-background/97 p-3 text-xs shadow-xl" style={{ left: tooltipLeft, top: Math.max(8, hoveredNeuron.y - 70) }}>
+                <div className="mb-2 font-semibold">{layer.name} · neuron {hoveredNeuron.neuronIndex + 1}</div>
+                <MetricRow label="Activation" value={activation === undefined ? "Select a sample" : formatValue(activation)} />
+                {hoveredNeuron.layerIndex > 0 && (
+                  <>
+                    <MetricRow label="Weighted sum" value={weightedInput === undefined ? "—" : formatValue(weightedInput)} />
+                    <MetricRow label="Bias" value={formatValue(bias)} />
+                    <MetricRow label="Pre-activation" value={preActivation === undefined ? "—" : formatValue(preActivation)} />
+                    <MetricRow label="Function" value={layer.activation} />
+                    <div className="mt-2 max-h-28 space-y-1 overflow-y-auto border-t pt-2 font-mono text-[10px]">
+                      {incomingWeights.map((weight, index) => (
+                        <div key={index} className="grid grid-cols-[1fr_auto] gap-2">
+                          <span className="text-muted-foreground">a{index + 1} × {formatValue(weight)}</span>
+                          <span>{trace ? formatValue(incomingContributions[index] ?? 0) : "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })()}
+        </div>
       </div>
+
+      {selectedSampleIndex !== null && (
+        <div className="absolute bottom-0 left-0 rounded-md border bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm">
+          Tracing sample #{selectedSampleIndex + 1}
+        </div>
+      )}
     </div>
   )
+}
+
+function LegendLine({ color, label, thin = false }: { color: string; label: string; thin?: boolean }) {
+  return <span><span className={`mr-1 inline-block w-3 border-t ${thin ? "border-t" : "border-t-2"} ${color}`} />{label}</span>
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return <div className="flex justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="font-mono">{value}</span></div>
+}
+
+function getLayerIdentity(type: string) {
+  if (type === "input") return { border: "border-emerald-600", fill: "rgb(34, 197, 94)", rgb: [34, 197, 94] as const }
+  if (type === "output") return { border: "border-amber-500", fill: "rgb(251, 191, 36)", rgb: [251, 191, 36] as const }
+  return { border: "border-blue-600", fill: "rgb(59, 130, 246)", rgb: [59, 130, 246] as const }
+}
+
+function mixWithWhite(color: readonly [number, number, number], strength: number) {
+  const channel = (value: number) => Math.round(255 - (255 - value) * strength)
+  return `rgb(${channel(color[0])}, ${channel(color[1])}, ${channel(color[2])})`
+}
+
+function formatValue(value: number) {
+  if (!Number.isFinite(value)) return "—"
+  if (Math.abs(value) < 0.001 && value !== 0) return value.toExponential(2)
+  return value.toFixed(4)
 }

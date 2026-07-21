@@ -9,9 +9,8 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Neural Net Playground",
-  description: "Design, train, and visualize tiny neural networks in your browser.",
-  generator: "v0.app",
+  title: "NeuroViz — Neural Network Playground",
+  description: "Train, inspect, and replay a compact neural network directly in your browser.",
 }
 
 export default function RootLayout({

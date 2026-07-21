@@ -10,6 +10,10 @@
 # production
 /build
 
+# test output
+/playwright-report/
+/test-results/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

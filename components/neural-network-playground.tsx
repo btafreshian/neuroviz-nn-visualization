@@ -1,93 +1,78 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
+import { BrainCircuit } from "lucide-react"
 import { GraphCanvas } from "./graph-canvas/graph-canvas"
 import { TrainingControls } from "./training/training-controls"
+import { TrainingDiagnostics } from "./training/training-diagnostics"
+import { VisualizationTimeline } from "./training/visualization-timeline"
 import { TrainingCharts } from "./training/training-charts"
 import { DecisionBoundary } from "./training/decision-boundary"
-import { useNetwork, NetworkProvider } from "@/lib/context/network-context"
+import { NetworkProvider } from "@/lib/context/network-context"
 import { NetworkInspector } from "./inspector/network-inspector"
 import { DatasetManager } from "./inspector/dataset-manager"
 import { HyperparameterPanel } from "./inspector/hyperparameter-panel"
 
 function PlaygroundContent() {
-  const { network } = useNetwork()
-
   return (
-    <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="border-b bg-card px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold">Neural Net Playground</h1>
-            <p className="text-sm text-muted-foreground">
-              Design, train, and visualize tiny neural networks in your browser
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <span className="mr-2">↑</span>
-              Import
-            </Button>
-            <Button variant="outline" size="sm">
-              <span className="mr-2">↓</span>
-              Export
-            </Button>
-            <Button variant="outline" size="sm">
-              <span className="mr-2">↗</span>
-              Share
-            </Button>
+    <div className="min-h-screen bg-muted/30">
+      <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex min-h-16 items-center px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              <BrainCircuit className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">Neural Net Playground</h1>
+              <p className="hidden truncate text-xs text-muted-foreground md:block">Train, inspect, and replay a compact neural network</p>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden p-4 gap-4 grid grid-cols-[1fr_320px]">
-        {/* Left side - Network visualization and controls */}
-        <div className="flex flex-col gap-4 min-h-0 overflow-y-auto">
-          {/* Network visualization - fixed height with padding */}
-          <div className="bg-card border rounded-lg p-8 h-[450px] flex-shrink-0">
-            <GraphCanvas />
-          </div>
+      <main className="grid gap-4 p-4 lg:p-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <section className="min-w-0 space-y-4">
+          <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <div className="h-[380px] p-4 sm:h-[420px] lg:p-6">
+              <GraphCanvas />
+            </div>
+            <VisualizationTimeline />
+          </section>
 
-          {/* Training controls */}
-          <div className="bg-card border rounded-lg flex-shrink-0">
+          <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
             <TrainingControls />
-          </div>
+            <TrainingDiagnostics />
+          </section>
 
-          {/* Training Progress and Decision Boundary independently scrollable */}
-          <div className="grid grid-cols-2 gap-4 flex-shrink-0">
-            <div className="bg-card border rounded-lg flex flex-col h-[500px]">
-              <h4 className="font-medium p-4 pb-2 flex-shrink-0">Training Progress</h4>
-              <div className="overflow-y-auto flex-1 px-4 pb-4">
+          <div className="grid items-stretch gap-4 lg:grid-cols-2">
+            <section className="flex flex-col rounded-xl border bg-card shadow-sm">
+              <div className="border-b px-5 py-4">
+                <h2 className="text-sm font-semibold">Training Progress</h2>
+                <p className="mt-1 text-xs text-muted-foreground">Train, validation, and previous-run comparison</p>
+              </div>
+              <div className="flex-1 p-4">
                 <TrainingCharts />
               </div>
-            </div>
+            </section>
 
-            <div className="bg-card border rounded-lg flex flex-col h-[500px]">
-              <h4 className="font-medium p-4 pb-2 flex-shrink-0">Decision Boundary</h4>
-              <div className="overflow-y-auto flex-1 px-4 pb-4">
+            <section className="flex flex-col rounded-xl border bg-card shadow-sm">
+              <div className="border-b px-5 py-4">
+                <h2 className="text-sm font-semibold">Decision Boundary</h2>
+                <p className="mt-1 text-xs text-muted-foreground">Model regions and dataset samples</p>
+              </div>
+              <div className="flex-1 p-4">
                 <DecisionBoundary />
               </div>
-            </div>
+            </section>
           </div>
-        </div>
+        </section>
 
-        {/* Right side - Inspector panels */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          <div className="bg-card border rounded-lg p-4">
-            <NetworkInspector />
-          </div>
+        <aside className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:sticky xl:top-20 xl:grid-cols-1 xl:self-start">
+          <NetworkInspector />
+          <HyperparameterPanel />
+          <DatasetManager />
+        </aside>
 
-          <div className="bg-card border rounded-lg p-4">
-            <DatasetManager />
-          </div>
-
-          <div className="bg-card border rounded-lg p-4">
-            <HyperparameterPanel />
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   )
 }
