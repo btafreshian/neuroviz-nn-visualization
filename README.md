@@ -4,6 +4,8 @@ NeuroViz is an interactive neural-network playground for learning what happens d
 
 Everything runs in the browser. There is no backend, account, database, or external model service.
 
+**Live website:** [neuroviz-nn-visualization.vercel.app](https://neuroviz-nn-visualization.vercel.app/)
+
 ## What you can explore
 
 - Train a real `2 → 8 → 6 → 1` feed-forward classifier with seeded initialization and deterministic datasets.
